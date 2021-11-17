@@ -1,6 +1,6 @@
 read -p 'Enter root filename:' rootname
 
-for f in $rootname*_Param.dat;
+for f in Data/$rootname*_Param.dat;
 do   
     arrIN=(${f//./ })
     arrIN1=(${arrIN[0]//_/ })
