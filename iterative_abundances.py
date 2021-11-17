@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from decimal import Decimal
 import os
 from shutil import copyfile
@@ -6,8 +7,33 @@ import subprocess
 import time
 import pandas as pd
 from datetime import datetime,timedelta
-#def gen_random_conditions(templates_path,):
 
+CHIMESPATH ="CHIMES_0.6/"    
+excluded = ['zeta','nh','T(K)','bthb','ynn','bnn','bee','bchim','gamh2','gamgr','gampeg','zlambd','xlamoh','xlamco','xlah2o','xlamc','xlamcp','xlamo','xlambn','wthb','xlambe','gamrc']  
+
+
+
+
+def plot_info(path_info,path_img):
+    lines =[]
+    with open(path_info,"r") as f:
+        lines = f.readlines()
+    
+    lines = [l for  l in lines if not l.startswith("#")]
+    lines = [l.split()[1:] for l in lines]
+    x,y = np.array([[float(l[0].split(":")[1]),float(l[1].split(":")[1])] for l in lines]).T
+    
+    
+    #PLOTTING
+    plt.figure(figsize=(8,8))
+    plt.scatter(x,y,s=5)
+    plt.xlabel("$\chi_C$",fontsize=15)
+    plt.ylabel("$\chi_{C+}$",fontsize=15)
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.savefig(path_img,bbox_inches="tight")
+    
+    return x,y
 def eformat(f, prec, exp_digits):
     s = "%.*E"%(prec, f)
     mantissa, exp = s.split('E')
@@ -133,7 +159,8 @@ def gen_execute(paramspath,outdir,name):
         #
         subprocess.call(['echo "$(tail -5 {}_exec.txt)" > ../Out/{}/{}_depldata.txt'.format(name,name,name)],cwd=outdir,shell=True)
         subprocess.call(['rm {}_exec.txt'.format(name)],cwd=outdir,shell=True)
-
+        
+        
         #subprocess.call('ls -l',shell=True)
         #        process = subprocess.Popen(['cd','CHIMES_0.6/'], stdout=f,cwd="/")
                 #process = subprocess.Popen(['./Chem_Evol', name], stdout=f)
@@ -145,6 +172,12 @@ def gen_execute(paramspath,outdir,name):
 
 def generate_train_sample(N,paramspath,paramdir,outdir,name):
     timestart = time.time()
+    
+    paramdir = CHIMESPATH+paramdir
+    outdir = CHIMESPATH+outdir
+    
+    print("Creating {} samples with name {} :".format(N,name))
+    
     startdate = datetime.today().strftime('%m%d')
     name = name+"_"+startdate
     names = []
@@ -161,20 +194,26 @@ def generate_train_sample(N,paramspath,paramdir,outdir,name):
     subprocess.call(['mv {}_* {}'.format(name,name)],cwd=paramdir,shell=True)
     subprocess.call(['mkdir {}'.format(name)],cwd=outdir,shell=True)
     subprocess.call(['mv {}_* {}'.format(name,name)],cwd=outdir,shell=True)
+    
     print("generating log file...")
     elapsed = time.time() - timestart
-    with open("{}{}/{}.info".format(outdir,name,name),"w") as ff:
-        ff.write("Elapsed_time  hh:mm:ss  {}\n".format(timedelta(seconds=elapsed)))
+    
+   
+    with open("{}{}/{}.info".format(outdir,name,name),"a+") as ff:
+        subprocess.call(['var="$(grep "Steady state has been computed" {}/*/*_depldata.txt | wc -l)"; echo "# $var models reached a stready state" >> {}/{}.info'.format(name,name,name)],cwd=outdir,shell=True)
+        ff.write("# Elapsed_time  hh:mm:ss  {}\n".format(timedelta(seconds=elapsed)))
         for l in description:
             ff.write(l+"\n")
-
+            
+    plot_info("{}{}/{}.info".format(outdir,name,name), "{}{}/{}.png".format(outdir,name,name))
+    
     print("Done.")
     return {"filenames":names,"dirname":name}
 
 
 
 # build the database
-def reformat_grah_file(name_in,name_out):
+def reformat_graph_file(name_in,name_out):
     with open(name_out,"w") as k:
         with open(name_in,"r") as f:
             while True:
@@ -186,10 +225,15 @@ def reformat_grah_file(name_in,name_out):
 
 
 def get_graph_data(name,ab_list=None,include_t = True,exclude=None):
-    reformat_grah_file(name+".graph",name+"_rf.graph")
-    data = pd.read_csv(name+"_rf.graph",sep=",",engine="python")
-    if exclude:
-        data = data.drop(exclude)
+    reformat_graph_file(name+".graph",name+"_rf.graph")
+    
+    if exclude:    
+        headers = [*pd.read_csv(name+"_rf.graph",sep=",", nrows=1)]
+        data = pd.read_csv(name+"_rf.graph",sep=",", usecols=[c for c in headers if c not in exclude])
+    else:
+        data = pd.read_csv(name+"_rf.graph",sep=",",engine="python")
+    #if exclude:
+    #    data = data.drop(exclude,axis=1)
     col_list = []
     if not ab_list:
         return data
@@ -204,10 +248,17 @@ def get_graph_data(name,ab_list=None,include_t = True,exclude=None):
 
 #convfactor from Myrs to seconds (s/Myrs)
 def get_deriv_data(name,ab_list=None,exclude = None,include_t = True,convfactor =31556925216000):
-    reformat_grah_file(name+".deriv",name+"_rf.deriv")
-    data = pd.read_csv(name+"_rf.deriv",sep=",",engine="python")
-    if exclude:
-        data = data.drop(exclude)
+    reformat_graph_file(name+".deriv",name+"_rf.deriv")
+       
+    if exclude:    
+        headers = [*pd.read_csv(name+"_rf.deriv",sep=",", nrows=1)]
+        data = pd.read_csv(name+"_rf.deriv",sep=",", usecols=[c for c in headers if c not in exclude])
+    else:
+        data = pd.read_csv(name+"_rf.deriv",sep=",",engine="python")
+
+    #data = pd.read_csv(name+"_rf.deriv",sep=",",engine="python")
+    #if exclude:
+    #    data = data.drop(exclude,axis=1)
     col_list = []
     if not ab_list:
         return data
@@ -225,10 +276,14 @@ def get_deriv_data(name,ab_list=None,exclude = None,include_t = True,convfactor 
 
 
 
-def compile_database(names,outname,pref=None,ab_list=None,exclude = None,include_t = True):
-    dfs = []
+def compile_database(dirname,N,pref=None,ab_list=None,exclude = None,include_t = True):
+    #dfs = []
+    outname = CHIMESPATH + "Out/" +dirname +"/"+dirname
     subprocess.call(['mkdir {}_csv'.format(outname)],shell=True)
-    print("compiling database of ",len(names)," samples")
+    names = [CHIMESPATH+"Out/"+dirname+"/"+x+"/"+x for x in os.listdir(CHIMESPATH+"/Out/"+dirname)  if not x.endswith("info") and not x.endswith("csv") and not  x.endswith("png")]
+
+
+    ("compiling database of ",len(names)," samples")
     for n in names:
         iter = n.split("_")[-1]
         print("compiling sample "+iter+"...")
@@ -261,19 +316,3 @@ def compile_database(names,outname,pref=None,ab_list=None,exclude = None,include
     print("done")
 
 
-
-
-
-# print("Destination file: CHIMES_0.6/Out/sample_20211107")
-# xnames = []
-# namedate ="nsample_20211107"
-# xdirname = "CHIMES_0.6/Out/"+namedate
-# with open("names.txt","r") as f:
-#     xnames = f.readlines()
-# xnames = [xdirname+"/"+x.replace("\n","")+"/"+x.replace("\n","") for x in xnames if "info" not in x]
-#
-# compile_database(xnames,xdirname+"/"+namedate)
-
-n_names =generate_train_sample(150,"CHIMES_0.6/Data/iterCorr1_Param.dat","CHIMES_0.6/Data/","CHIMES_0.6/Out/","nsample")
-
-compile_database(n_names["filenames"],"CHIMES_0.6/Out/"+n_names["dirname"]+"/"+n_names["dirname"])
