@@ -4,10 +4,11 @@ import iterative_params as it_p
 
 if __name__ == '__main__':
     
-    name_ = "tit"
+    name_ = "test"
+    N = 10
     
-    n_names =it_ab.generate_train_sample(2,it_ab.CHIMESPATH+"Data/iterCorr1_Param.dat","Data/","Out/",name_)
-    
+    n_names =it_ab.generate_train_sample(N,it_ab.CHIMESPATH+"Data/iterCorr1_Param.dat","Data/","Out/",name_)
+    # the _1117 is for the 17 of Nov . the date is used to tag the samples generated
     it_ab.compile_database(name_+"_1117",10,exclude=it_ab.excluded)
     
 
